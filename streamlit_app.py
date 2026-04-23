@@ -1,13 +1,11 @@
 import streamlit as st
-
-st.title("Literature Scraping Dashboard")
+st.title("Research Data Extraction Dashboard")
 st.write(
     "Welcome to the Literature Scraping Tool and Dashboard, designed to simplify research and make science a little easier for us all. Let's get started!")
 """Literature Scraping Tool - Streamlit App.
 
 This app extracts text from PDF, DOCX, or TXT files and either searches for keywords or extracts all numeric values.
 """
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -138,6 +136,43 @@ def extract_text_from_file(file_input) -> PaperInfo:
 def setup_streamlit_ui():
     """Set up the Streamlit user interface and return user inputs."""
     st.set_page_config(page_title="Literature Scraper", layout="wide")
+    
+    # Custom CSS for background color and button styling
+    st.markdown(
+        """
+        <style>
+        [data-testid="stAppViewContainer"] {
+            background-color: #F1F3F5;
+        }
+        
+        /* All buttons to purple */
+        button {
+            background-color: #6C63FF !important;
+            border-color: #6C63FF !important;
+            color: white !important;
+        }
+        
+        /* Radio buttons to green */
+        input[type="radio"] {
+            accent-color: #28A745 !important;
+        }
+        
+        /* Keywords text input outline and white background */
+        [data-testid="stTextInput"] input {
+            border: 2px solid #6C63FF !important;
+            border-radius: 4px !important;
+            background-color: white !important;
+        }
+        
+        /* Hover effects */
+        button:hover {
+            opacity: 0.8 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    
     st.title("📄 Literature Scraper")
     
     st.write("Upload up to 10 PDF, DOCX, or TXT files and extract information.")
@@ -164,9 +199,10 @@ def setup_streamlit_ui():
     # Keywords input and sorting (conditional)
     keywords = None
     sort_order = None
+    number_pattern = None
     if mode == "Search Keywords":
         keywords_text = st.text_input(
-            "Enter keywords to search for (separated by commas):",
+            "Enter keywords or key phrases to search for (separated by commas):",
             key="keywords_input"
         )
         if keywords_text:
@@ -177,46 +213,70 @@ def setup_streamlit_ui():
             ["No ranking", "Highest to lowest", "Lowest to highest"],
             key="sort_radio"
         )
+    else:
+        number_pattern = st.text_input(
+            "Enter the exact number(s) or regex pattern to extract:",
+            placeholder="e.g. 42, 3.14, \d{4}-\d{2}-\d{2}",
+            key="number_pattern_input"
+        )
+        st.caption("Enter comma-separated numbers or a regex pattern. The app will extract only matching values.")
     
     # Process button
     if st.button("Process Files", type="primary"):
         if not uploaded_files:
             st.warning("Please upload at least one file.")
-            return None, None, None, None
+            return None, None, None, None, None
         if mode == "Search Keywords" and not keywords:
             st.warning("Please enter keywords.")
-            return None, None, None, None
-        return uploaded_files, mode, keywords, sort_order
-    
-    return None, None, None, None
+            return None, None, None, None, None
+        if mode != "Search Keywords" and not number_pattern:
+            st.warning("Please enter a number or pattern to extract.")
+            return None, None, None, None, None
+        return uploaded_files, mode, keywords, sort_order, number_pattern
+
+    return None, None, None, None, None
 
 
 def search_keywords(text: str, keywords: List[str]) -> Dict[str, int]:
-    """Search for keywords in text and return counts (case-insensitive)."""
-    text_lower = text.lower()
+    """Search for keywords or phrases in text and return counts (case-insensitive)."""
     counts = {}
     for keyword in keywords:
-        keyword_lower = keyword.lower()
-        count = text_lower.count(keyword_lower)
-        counts[keyword] = count
+        keyword = keyword.strip()
+        if not keyword:
+            continue
+        pattern = rf"\b{re.escape(keyword)}\b"
+        matches = re.findall(pattern, text, flags=re.IGNORECASE)
+        counts[keyword] = len(matches)
     return counts
 
 
-def extract_numbers(text: str) -> List[str]:
-    """Extract all numeric values from text using regex (integers, decimals, fractions, complex)."""
-    # Regex patterns for different number types
-    patterns = [
-        r'\b\d+\.\d+\b',  # decimals like 3.14
-        r'\b\d+/\d+\b',   # fractions like 1/2
-        r'\b\d+\+\d+i\b', # complex like 2+3i
-        r'\b\d+i\b',      # imaginary like 5i
-        r'\b\d+\b',       # integers like 42
-    ]
+def extract_numbers(text: str, number_pattern: str) -> List[str]:
+    """Extract only user-specified numbers or patterns from text."""
+    if not number_pattern:
+        return []
+
+    patterns = []
+    trimmed = number_pattern.strip()
+    if "," in trimmed:
+        for part in trimmed.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if re.search(r'[\\.^$*+?{}\[\]|()]', part):
+                patterns.append(part)
+            else:
+                patterns.append(rf'\b{re.escape(part)}\b')
+    else:
+        if re.search(r'[\\.^$*+?{}\[\]|()]', trimmed):
+            patterns.append(trimmed)
+        else:
+            patterns.append(rf'\b{re.escape(trimmed)}\b')
+
     numbers = []
     for pattern in patterns:
         matches = re.findall(pattern, text)
         numbers.extend(matches)
-    # Remove duplicates while preserving order
+
     seen = set()
     unique_numbers = []
     for num in numbers:
@@ -251,9 +311,9 @@ def generate_report(results, mode, keywords, sort_order):
         report_lines.append("")
 
         report_lines.append("Most Relevant Papers:")
-        for info, kc, _ in results:
+        for idx, (info, kc, _) in enumerate(results, start=1):
             total = sum(kc.values()) if kc else 0
-            report_lines.append(f"  {info.path.name} — {total} matches")
+            report_lines.append(f"  {idx}. {info.path.name} — {total} matches")
         report_lines.append("")
 
         report_lines.append("Detailed Results:")
@@ -370,7 +430,7 @@ def generate_wordcloud_image(keyword_counts: Dict[str, int]):
 
 
 def main() -> None:
-    uploaded_files, mode, keywords, sort_order = setup_streamlit_ui()
+    uploaded_files, mode, keywords, sort_order, number_pattern = setup_streamlit_ui()
     
     if uploaded_files is None:
         return
@@ -386,7 +446,7 @@ def main() -> None:
                 total_matches = sum(keyword_counts.values())
                 results.append((info, keyword_counts, None))
             else:  # Extract Numbers
-                numbers = extract_numbers(info.text)
+                numbers = extract_numbers(info.text, number_pattern)
                 results.append((info, None, numbers))
         except Exception as e:
             st.error(f"Error processing {uploaded_file.name}: {str(e)}")
@@ -458,13 +518,14 @@ def main() -> None:
                         row[kw] = kc.get(kw, 0) if kc else 0
                     table_data.append(row)
                 df_table = pd.DataFrame(table_data)
+                df_table.index = range(1, len(df_table) + 1)  # Start index from 1
                 st.dataframe(df_table)
             
             # Most Relevant Papers
             st.subheader("Most Relevant Papers")
-            for info, kc, _ in results:
+            for rank, (info, kc, _) in enumerate(results, start=1):
                 total = sum(kc.values()) if kc else 0
-                st.write(f"{info.path.name} — {total} matches")
+                st.write(f"{rank}. {info.path.name} — {total} matches")
             
             # Detailed Results
             st.subheader("Detailed Results")
