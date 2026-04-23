@@ -1,19 +1,46 @@
-# 🎈 Blank app template
+# 📚 Literature Scraping Tool
 
-A simple Streamlit app template for you to modify!
+## 🚀 Live App
+Try the app here:  
+👉 https://your-app-name.streamlit.app  
+*(Add your deployed Streamlit link here once your app is live.)*
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://blank-app-template.streamlit.app/)
+---
 
-### How to run it on your own machine
+## 🧠 Project Overview
+The Literature Scraping Tool is an interactive application designed to help researchers efficiently analyze and prioritize scientific papers. By automatically extracting text and identifying keyword frequency across multiple documents, this tool streamlines the literature review process and highlights the most relevant papers for further study.
 
-1. Install the requirements
+---
 
-   ```
-   $ pip install -r requirements.txt
-   ```
+## ✨ Features
+- Upload up to 10 PDF, DOCX, or TXT files
+- Perform keyword-based searches across documents
+- Count how many times each keyword appears in each file
+- Extract numerical values from text
+- Preview extracted text from each document
+- Identify the most relevant papers based on keyword frequency
 
-2. Run the app
+---
 
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+## 🎯 Purpose
+Literature reviews can be time-consuming and repetitive. This tool reduces manual effort by automating text extraction and keyword analysis, allowing users to quickly focus on the most relevant research. It is especially useful for students, researchers, and professionals working with large volumes of scientific literature.
+
+---
+
+## 🧪 Example Use Case
+A researcher studying lung injury from vaping can upload multiple research papers and search for keywords such as:
+- inflammation
+- IL-6
+- TNF-alpha
+
+The tool will quickly identify which papers contain these terms and how frequently they appear, helping prioritize relevant literature for deeper analysis.
+
+---
+
+## 📂 Project Structure
+```text
+your-project/
+├── app.py                  # Streamlit app interface
+├── literature_scraper.py   # Core logic for text extraction and analysis
+├── requirements.txt        # Project dependencies
+├── README.md
