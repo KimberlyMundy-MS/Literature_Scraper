@@ -18,6 +18,7 @@ import pandas as pd
 import pypdf as PyPDF2
 from docx import Document
 import streamlit as st
+import plotly.express as px
 
 
 @dataclass
@@ -333,10 +334,23 @@ def generate_report(results, mode, keywords, sort_order):
     return "\n".join(report_lines)
 
 
+def highlight_keywords(text: str, keywords: List[str]) -> str:
+    """Highlight keywords in text using markdown bold."""
+    if not keywords:
+        return text
+    highlighted = text
+    for keyword in keywords:
+        # Use word boundaries and case-insensitive replacement
+        pattern = r'\b' + re.escape(keyword) + r'\b'
+        highlighted = re.sub(pattern, f'**{keyword}**', highlighted, flags=re.IGNORECASE)
+    return highlighted
+
+
 def generate_wordcloud_image(keyword_counts: Dict[str, int]):
     """Generate a word cloud image from keyword frequencies."""
     try:
         from wordcloud import WordCloud
+        import io
     except ImportError:
         return None
 
@@ -349,7 +363,10 @@ def generate_wordcloud_image(keyword_counts: Dict[str, int]):
         background_color="white",
         colormap="viridis"
     )
-    return cloud.generate_from_frequencies(keyword_counts).to_image()
+    img = cloud.generate_from_frequencies(keyword_counts).to_image()
+    buf = io.BytesIO()
+    img.save(buf, format='PNG')
+    return buf.getvalue()
 
 
 def main() -> None:
@@ -408,7 +425,8 @@ def main() -> None:
             # Bar chart: Keyword matches per paper
             data = {"Paper": [info.path.name for info, kc, _ in results], "Matches": [sum(kc.values()) if kc else 0 for _, kc, _ in results]}
             df = pd.DataFrame(data)
-            st.bar_chart(df.set_index("Paper"))
+            fig = px.bar(df, x="Matches", y="Paper", orientation='h', title="Keyword Matches per Paper")
+            st.plotly_chart(fig, use_container_width=True)
             
             # Top keywords frequency
             all_keywords = {}
@@ -419,7 +437,8 @@ def main() -> None:
             if all_keywords:
                 top_keywords = sorted(all_keywords.items(), key=lambda x: x[1], reverse=True)[:10]
                 kw_df = pd.DataFrame({"Keyword": [k for k, v in top_keywords], "Frequency": [v for k, v in top_keywords]})
-                st.bar_chart(kw_df.set_index("Keyword"))
+                fig = px.bar(kw_df, x="Frequency", y="Keyword", orientation='h', title="Top 10 Keywords by Frequency")
+                st.plotly_chart(fig, use_container_width=True)
 
                 # Word cloud for top keyword frequencies
                 wc_counts = dict(sorted(all_keywords.items(), key=lambda x: x[1], reverse=True)[:30])
@@ -428,6 +447,18 @@ def main() -> None:
                     st.image(wc_image, caption="Keyword Word Cloud", use_column_width=True)
                 else:
                     st.info("Install the `wordcloud` package to display the keyword word cloud.")
+                
+                # Table: Paper vs Keyword Counts
+                st.subheader("Keyword Counts Table")
+                unique_keywords = list(all_keywords.keys())
+                table_data = []
+                for info, kc, _ in results:
+                    row = {"Paper": info.path.name}
+                    for kw in unique_keywords:
+                        row[kw] = kc.get(kw, 0) if kc else 0
+                    table_data.append(row)
+                df_table = pd.DataFrame(table_data)
+                st.dataframe(df_table)
             
             # Most Relevant Papers
             st.subheader("Most Relevant Papers")
@@ -453,7 +484,8 @@ def main() -> None:
                     preview = info.text.strip().replace("\n", " ")[:500]
                     if len(info.text.strip()) > 500:
                         preview += "..."
-                    st.text(preview)
+                    highlighted_preview = highlight_keywords(preview, keywords) if keywords else preview
+                    st.markdown(highlighted_preview)
                     
                     if keyword_counts:
                         st.write("**Keyword Breakdown:**")
@@ -535,7 +567,7 @@ def main() -> None:
             label="📥 Download Report",
             data=report,
             file_name="literature_report.txt",
-            mime_type="text/plain",
+            mime="text/plain",
             key="download_report"
         )
 
